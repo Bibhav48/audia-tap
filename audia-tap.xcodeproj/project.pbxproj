@@ -19,7 +19,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		9A3A20DA2F6E8D2800B21D68 /* audia-tap */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "audia-tap"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A3A20DA2F6E8D2800B21D68 /* audia-tap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "audia-tap.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,7 +52,7 @@
 		9A3A20DB2F6E8D2800B21D68 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				9A3A20DA2F6E8D2800B21D68 /* audia-tap */,
+				9A3A20DA2F6E8D2800B21D68 /* audia-tap.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,8 +79,8 @@
 			packageProductDependencies = (
 			);
 			productName = "audia-tap";
-			productReference = 9A3A20DA2F6E8D2800B21D68 /* audia-tap */;
-			productType = "com.apple.product-type.tool";
+			productReference = 9A3A20DA2F6E8D2800B21D68 /* audia-tap.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -162,7 +162,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = FDN6XB3UW9;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -226,7 +225,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = FDN6XB3UW9;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -250,9 +248,17 @@
 		9A3A20E22F6E8D2800B21D68 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = FDN6XB3UW9;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ARCHS = arm64;
+				CONFIGURATION_BUILD_DIR = "$(PROJECT_DIR)/dist/Debug";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_ENTITLEMENTS = "audia-tap/audia-tap.entitlements";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "audia-tap/Info.plist";
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.audia.tap";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -263,9 +269,17 @@
 		9A3A20E32F6E8D2800B21D68 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = FDN6XB3UW9;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ARCHS = arm64;
+				CONFIGURATION_BUILD_DIR = "$(PROJECT_DIR)/dist/Release";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_ENTITLEMENTS = "audia-tap/audia-tap.entitlements";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "audia-tap/Info.plist";
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.audia.tap";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
