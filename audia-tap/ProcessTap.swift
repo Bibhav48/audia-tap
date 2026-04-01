@@ -3,25 +3,6 @@ import AudioToolbox
 import AVFoundation
 import OSLog
 
-private let processTapDebugEnabled = ProcessInfo.processInfo.environment["AUDIA_TAP_DEBUG"] == "1"
-
-private func processTapDebug(_ message: String) {
-    guard processTapDebugEnabled else { return }
-    FileHandle.standardError.write(Data("[audia-tap] \(message)\n".utf8))
-}
-
-private extension UInt32 {
-    var processTapFourCharString: String {
-        String(cString: [
-            UInt8((self >> 24) & 0xFF),
-            UInt8((self >> 16) & 0xFF),
-            UInt8((self >> 8) & 0xFF),
-            UInt8(self & 0xFF),
-            0
-        ])
-    }
-}
-
 enum TapError: LocalizedError {
     case tapCreationFailed(OSStatus)
     case aggregateCreationFailed(OSStatus)
@@ -90,7 +71,7 @@ final class ProcessTapController {
         processTapID = tapID
         tapStreamDescription = try? tapID.readAudioTapStreamBasicDescription()
         if let tapStreamDescription {
-            processTapDebug("Tap ASBD sr=\(tapStreamDescription.mSampleRate) format=\(tapStreamDescription.mFormatID.processTapFourCharString) flags=\(tapStreamDescription.mFormatFlags) bytesPerFrame=\(tapStreamDescription.mBytesPerFrame) channels=\(tapStreamDescription.mChannelsPerFrame) bits=\(tapStreamDescription.mBitsPerChannel)")
+            Console.debug("Tap ASBD sr=\(tapStreamDescription.mSampleRate) format=\(tapStreamDescription.mFormatID.fourCharString) flags=\(tapStreamDescription.mFormatFlags) bytesPerFrame=\(tapStreamDescription.mBytesPerFrame) channels=\(tapStreamDescription.mChannelsPerFrame) bits=\(tapStreamDescription.mBitsPerChannel)")
         }
 
         let aggregateDescription = buildAggregateDescription(
@@ -223,12 +204,12 @@ final class ProcessTapController {
             let outputSummary = outputBuffers.enumerated().map { index, buffer in
                 "out[\(index)] bytes=\(buffer.mDataByteSize) ch=\(buffer.mNumberChannels)"
             }.joined(separator: " ")
-            processTapDebug("Callback buffers \(inputSummary) \(outputSummary)")
+            Console.debug("Callback buffers \(inputSummary) \(outputSummary)")
         }
 
-        if processTapDebugEnabled && callbackPeakLogCount < 4 {
+        if globalVerbose && callbackPeakLogCount < 4 {
             let inputPeak = rawInputPeak(from: inputBuffers)
-            processTapDebug("Callback input peak=\(inputPeak)")
+            Console.debug("Callback input peak=\(inputPeak)")
         }
 
         for outputIndex in 0..<outputBuffers.count {
@@ -261,12 +242,12 @@ final class ProcessTapController {
                 let leftFloats = leftData.assumingMemoryBound(to: Float.self)
                 let rightFloats = rightData.assumingMemoryBound(to: Float.self)
                 let frames = Int(outputBuffers[0].mDataByteSize) / MemoryLayout<Float>.size
-                if processTapDebugEnabled && frames > 0 && callbackPeakLogCount < 4 {
+                if globalVerbose && frames > 0 && callbackPeakLogCount < 4 {
                     var peak: Float = 0
                     for frame in 0..<min(frames, 512) {
                         peak = max(peak, abs(leftFloats[frame]), abs(rightFloats[frame]))
                     }
-                    processTapDebug("Callback planar write frames=\(frames) peak=\(peak)")
+                    Console.debug("Callback planar write frames=\(frames) peak=\(peak)")
                     callbackPeakLogCount += 1
                 }
                 ringBuffer.write(left: leftFloats, right: rightFloats, frames: frames)
@@ -292,12 +273,12 @@ final class ProcessTapController {
             scratchRight[frame] = floats[(frame * channelCount) + 1]
         }
 
-        if processTapDebugEnabled && frames > 0 && callbackPeakLogCount < 4 {
+        if globalVerbose && frames > 0 && callbackPeakLogCount < 4 {
             var peak: Float = 0
             for frame in 0..<min(frames, 512) {
                 peak = max(peak, abs(scratchLeft[frame]), abs(scratchRight[frame]))
             }
-            processTapDebug("Callback interleaved write frames=\(frames) channels=\(channelCount) peak=\(peak)")
+            Console.debug("Callback interleaved write frames=\(frames) channels=\(channelCount) peak=\(peak)")
             callbackPeakLogCount += 1
         }
 

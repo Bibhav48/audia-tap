@@ -53,14 +53,6 @@ enum Console {
     }
 }
 
-private func debugLog(_ message: String) {
-    Console.debug(message)
-}
-
-private func infoLog(_ message: String) {
-    Console.info(message)
-}
-
 // MARK: - Options
 
 /// All user-configurable options parsed from the command line.
@@ -411,7 +403,7 @@ private func resolveAppNameToPID(_ name: String) throws -> pid_t {
     if let match = processes.first(where: {
         $0.name.lowercased().contains(lower) || $0.bundleID.lowercased().contains(lower)
     }) {
-        debugLog("Resolved --app '\(name)' to pid \(match.pid) (\(match.name))")
+        Console.debug("Resolved --app '\(name)' to pid \(match.pid) (\(match.name))")
         return match.pid
     }
     throw "No audio process found matching '\(name)'. Run audia-tap --list to see available processes."
@@ -436,7 +428,7 @@ private enum AudioCapturePermissionStatus: CustomStringConvertible, Equatable {
 private func loadTCCSymbol<T>(_ name: String, type: T.Type) -> T? {
     guard let handle = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_NOW),
           let symbol = dlsym(handle, name) else {
-        debugLog("TCC symbol lookup failed for \(name)")
+        Console.debug("TCC symbol lookup failed for \(name)")
         return nil
     }
     return unsafeBitCast(symbol, to: T.self)
@@ -458,7 +450,7 @@ private func mapAudioCapturePermission(rawValue: Int32?) -> AudioCapturePermissi
 
 private func preflightAudioCapturePermission() -> AudioCapturePermissionStatus {
     let raw = rawPreflightAudioCapturePermission()
-    debugLog("TCCAccessPreflight(AudioCapture) -> \(raw.map(String.init) ?? "nil")")
+    Console.debug("TCCAccessPreflight(AudioCapture) -> \(raw.map(String.init) ?? "nil")")
     return mapAudioCapturePermission(rawValue: raw)
 }
 
@@ -475,10 +467,10 @@ private func requestAudioCapturePermission() -> AudioCapturePermissionStatus {
         semaphore.signal()
     }
     _ = semaphore.wait(timeout: .now() + 30)
-    debugLog("TCCAccessRequest(AudioCapture) callback -> \(granted)")
+    Console.debug("TCCAccessRequest(AudioCapture) callback -> \(granted)")
 
     let status = granted ? AudioCapturePermissionStatus.authorized : preflightAudioCapturePermission()
-    debugLog("AudioCapture permission after request -> \(status)")
+    Console.debug("AudioCapture permission after request -> \(status)")
     return status
 }
 
@@ -502,7 +494,7 @@ private func autoLaunchForPermission() throws {
     guard FileManager.default.fileExists(atPath: appPath) else {
         throw "Cannot find audia-tap.app at \(appPath). Build the Xcode project first."
     }
-    infoLog("Audio Capture permission required. Launching app to request...")
+    Console.info("Audio Capture permission required. Launching app to request...")
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
     process.arguments = ["-a", appPath, "--args", "--launched-for-permission", "-W"]
@@ -515,15 +507,15 @@ private func autoLaunchForPermission() throws {
     guard status == .authorized else {
         throw "Audio Capture permission was not granted. Please grant permission when prompted and try again."
     }
-    infoLog("Audio Capture permission granted.")
+    Console.info("Audio Capture permission granted.")
 }
 
 private func ensureAudioCapturePermission() throws {
     switch preflightAudioCapturePermission() {
     case .authorized:
-        debugLog("Audio Capture permission already authorized.")
+        Console.debug("Audio Capture permission already authorized.")
     case .denied, .unknown:
-        debugLog("Audio Capture permission not authorized, attempting auto-launch...")
+        Console.debug("Audio Capture permission not authorized, attempting auto-launch...")
         try autoLaunchForPermission()
     }
 }
@@ -600,7 +592,7 @@ final class AgentServer {
         try setupListener()
         running = true
         acceptQueue.async { [weak self] in self?.acceptLoop() }
-        debugLog("Agent listening on \(socketPath)")
+        Console.debug("Agent listening on \(socketPath)")
     }
 
     func stop() {
@@ -638,7 +630,7 @@ final class AgentServer {
                 continue
             }
             if errno == EINTR { continue }
-            if running { debugLog("accept() failed with errno \(errno)") }
+            if running { Console.debug("accept() failed with errno \(errno)") }
             break
         }
     }
@@ -652,7 +644,7 @@ final class AgentServer {
             close(clientFD)
             clientLock.lock(); activeClients -= 1; let count = activeClients; clientLock.unlock()
             if count == 0 {
-                debugLog("Last client disconnected, shutting down agent.")
+                Console.debug("Last client disconnected, shutting down agent.")
                 self.stop(); exit(0)
             }
         }
@@ -672,12 +664,12 @@ final class AgentServer {
                         try writeAll(fileDescriptor: clientFD, buffer: bytes, count: byteCount)
                     }
                 } catch {
-                    debugLog("Agent stream error for pid \(pid): \(error)")
+                    Console.debug("Agent stream error for pid \(pid): \(error)")
                 }
             }
             _ = semaphore.wait(timeout: .distantFuture)
         } catch {
-            debugLog("Agent request failed: \(error)")
+            Console.debug("Agent request failed: \(error)")
         }
     }
 }
@@ -742,7 +734,7 @@ private func killStaleAgents() {
 }
 
 private func autoLaunchAgent(appPath: String) throws {
-    debugLog("Auto-launching agent via \(appPath)")
+    Console.debug("Auto-launching agent via \(appPath)")
     let proc = Process()
     proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
     proc.arguments = ["-njg", appPath, "--args", "--agent"]
@@ -763,7 +755,7 @@ private func waitForAgentSocket(socketPath: String, timeout: TimeInterval) throw
         Thread.sleep(forTimeInterval: 0.1)
     }
     Thread.sleep(forTimeInterval: 0.2)
-    debugLog("Agent socket ready at \(socketPath)")
+    Console.debug("Agent socket ready at \(socketPath)")
 }
 
 // MARK: - Output handle
@@ -803,15 +795,15 @@ private func runDirect(pid: pid_t, options: CLIOptions) throws {
 
     if FileManager.default.fileExists(atPath: options.socketPath) {
         do {
-            debugLog("Agent socket found, attempting connection")
+            Console.debug("Agent socket found, attempting connection")
             try runClient(pid: pid, options: options)
             return
         } catch {
-            debugLog("Stale socket detected (\(error)), cleaning up")
+            Console.debug("Stale socket detected (\(error)), cleaning up")
         }
     }
 
-    infoLog("Auto-starting background agent...")
+    Console.info("Auto-starting background agent...")
     killStaleAgents()
     try? FileManager.default.removeItem(atPath: options.socketPath)
 
@@ -893,7 +885,7 @@ do {
 
         let outputHandle = try openOutputHandle(options: options)
 
-        infoLog("Tapping \(process.name) (pid \(pid)) → \(options.format.rawValue) \(Int(options.sampleRate))Hz \(options.channels)ch")
+        Console.info("Tapping \(process.name) (pid \(pid)) → \(options.format.rawValue) \(Int(options.sampleRate))Hz \(options.channels)ch")
 
         let signal = SignalRelay()
         signal.install { _ in stream.stop(); exit(0) }

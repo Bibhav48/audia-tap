@@ -2,20 +2,6 @@ import Foundation
 import AudioToolbox
 import Darwin
 
-/// Resolves a human-readable name for a given PID, falling back gracefully.
-private func processName(pid: pid_t, bundleID: String?) -> String {
-    let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: Int(MAXPATHLEN))
-    defer { buffer.deallocate() }
-    if proc_name(pid, buffer, UInt32(MAXPATHLEN)) > 0 {
-        let name = String(cString: buffer)
-        if !name.isEmpty { return name }
-    }
-    if let bundleID, let last = bundleID.split(separator: ".").last, !last.isEmpty {
-        return String(last)
-    }
-    return "pid-\(pid)"
-}
-
 struct AudioProcessInfo {
     let pid: pid_t
     let name: String
@@ -31,7 +17,7 @@ func fetchAudioProcessList() throws -> [AudioProcessInfo] {
             return nil
         }
         let bundleID = objectID.readProcessBundleID() ?? ""
-        let name = processName(pid: pid, bundleID: bundleID.isEmpty ? nil : bundleID)
+        let name = getProcessName(pid: pid, bundleID: bundleID.isEmpty ? nil : bundleID)
         let running = objectID.readProcessIsRunningOutput()
         return AudioProcessInfo(pid: pid, name: name, bundleID: bundleID, isRunningOutput: running)
     }.sorted { $0.pid < $1.pid }

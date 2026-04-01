@@ -2,8 +2,6 @@ import Foundation
 import AudioToolbox
 import Darwin
 
-private let audioProcessDebugEnabled = ProcessInfo.processInfo.environment["AUDIA_TAP_DEBUG"] == "1"
-
 struct AudioProcess: Hashable, Sendable {
     let id: pid_t
     let name: String
@@ -17,25 +15,25 @@ struct AudioProcess: Hashable, Sendable {
         self.objectID = objectID
         let resolvedPID = (try? objectID.read(kAudioProcessPropertyPID, defaultValue: pid)) ?? pid
         self.bundleID = objectID.readProcessBundleID() ?? requestedInfo.bundleID
-        self.name = AudioProcess.resolveName(pid: resolvedPID, bundleID: bundleID)
+        self.name = getProcessName(pid: resolvedPID, bundleID: bundleID)
     }
 
     private static func resolveObjectID(for requested: ProcessIdentity) throws -> AudioObjectID {
-        debug("Resolving pid \(requested.pid) bundle=\(requested.bundleID ?? "nil") exec=\(requested.executableName)")
+        Console.debug("Resolving pid \(requested.pid) bundle=\(requested.bundleID ?? "nil") exec=\(requested.executableName)")
 
         if let objectID = try? AudioObjectID.translatePIDToProcessObjectID(pid: requested.pid), objectID.isValid {
-            debug("Resolved via translatePIDToProcessObjectID -> object \(objectID)")
+            Console.debug("Resolved via translatePIDToProcessObjectID -> object \(objectID)")
             return objectID
         }
-        debug("translatePIDToProcessObjectID failed for pid \(requested.pid), falling back to HAL process list")
+        Console.debug("translatePIDToProcessObjectID failed for pid \(requested.pid), falling back to HAL process list")
 
         let processObjects = try AudioObjectID.readProcessList()
-        debug("HAL process list count \(processObjects.count)")
+        Console.debug("HAL process list count \(processObjects.count)")
         for objectID in processObjects.prefix(10) {
             let pid = (try? objectID.read(kAudioProcessPropertyPID, defaultValue: pid_t(-1))) ?? -1
             let bundleID = objectID.readProcessBundleID() ?? "nil"
             let running = objectID.readProcessIsRunningOutput()
-            debug("raw object=\(objectID) pid=\(pid) running=\(running) bundle=\(bundleID)")
+            Console.debug("raw object=\(objectID) pid=\(pid) running=\(running) bundle=\(bundleID)")
         }
         let candidates = processObjects.compactMap { objectID -> Candidate? in
             let candidatePID = (try? objectID.read(kAudioProcessPropertyPID, defaultValue: pid_t(-1))) ?? -1
@@ -50,9 +48,9 @@ struct AudioProcess: Hashable, Sendable {
             return Candidate(objectID: objectID, pid: candidatePID, score: score)
         }
 
-        debug("HAL fallback produced \(candidates.count) candidates")
+        Console.debug("HAL fallback produced \(candidates.count) candidates")
         for candidate in candidates.sorted(by: { $0.score > $1.score }).prefix(5) {
-            debug("candidate object=\(candidate.objectID) pid=\(candidate.pid) score=\(candidate.score)")
+            Console.debug("candidate object=\(candidate.objectID) pid=\(candidate.pid) score=\(candidate.score)")
         }
 
         if let best = candidates.max(by: { lhs, rhs in
@@ -61,11 +59,11 @@ struct AudioProcess: Hashable, Sendable {
             }
             return lhs.score < rhs.score
         }) {
-            debug("Selected object \(best.objectID) for pid \(requested.pid)")
+            Console.debug("Selected object \(best.objectID) for pid \(requested.pid)")
             return best.objectID
         }
 
-        debug("No HAL candidate matched pid \(requested.pid)")
+        Console.debug("No HAL candidate matched pid \(requested.pid)")
         throw "Invalid process identifier: \(requested.pid)"
     }
 
@@ -96,29 +94,6 @@ struct AudioProcess: Hashable, Sendable {
 
         return score
     }
-
-    private static func resolveName(pid: pid_t, bundleID: String?) -> String {
-        let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: Int(MAXPATHLEN))
-        defer { buffer.deallocate() }
-
-        if proc_name(pid, buffer, UInt32(MAXPATHLEN)) > 0 {
-            let name = String(cString: buffer)
-            if !name.isEmpty {
-                return name
-            }
-        }
-
-        if let bundleID, let last = bundleID.split(separator: ".").last, !last.isEmpty {
-            return String(last)
-        }
-
-        return "pid-\(pid)"
-    }
-}
-
-private func debug(_ message: String) {
-    guard audioProcessDebugEnabled else { return }
-    FileHandle.standardError.write(Data("[audia-tap] \(message)\n".utf8))
 }
 
 private struct Candidate {

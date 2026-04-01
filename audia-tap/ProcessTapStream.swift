@@ -3,13 +3,6 @@ import Foundation
 import AudioToolbox
 import OSLog
 
-private let processTapStreamDebugEnabled = ProcessInfo.processInfo.environment["AUDIA_TAP_DEBUG"] == "1"
-
-private func processTapStreamDebug(_ message: String) {
-    guard processTapStreamDebugEnabled else { return }
-    FileHandle.standardError.write(Data("[audia-tap] \(message)\n".utf8))
-}
-
 // MARK: - Output format
 
 enum OutputFormat: String, CaseIterable {
@@ -187,7 +180,7 @@ final class ProcessTapStream {
         converter.sampleRateConverterQuality = AVAudioQuality.max.rawValue
         if destChannels == 1 { converter.downmix = true }
 
-        processTapStreamDebug("Stream src sr=\(sourceSampleRate) ch=2 -> dst sr=\(destSampleRate) ch=\(destChannels) fmt=\(destFormat.rawValue) vol=\(volume) gate=\(silenceThreshold)")
+        Console.debug("Stream src sr=\(sourceSampleRate) ch=2 -> dst sr=\(destSampleRate) ch=\(destChannels) fmt=\(destFormat.rawValue) vol=\(volume) gate=\(silenceThreshold)")
 
         guard let inputBuffer = AVAudioPCMBuffer(
             pcmFormat: sourceFormat,
@@ -243,17 +236,17 @@ final class ProcessTapStream {
                 }
                 let rms = (sumSq / Float(framesRead * 2)).squareRoot()
                 if rms < silenceThreshold {
-                    processTapStreamDebug("Silence gate: rms=\(rms) < threshold=\(silenceThreshold), skipping chunk")
+                    Console.debug("Silence gate: rms=\(rms) < threshold=\(silenceThreshold), skipping chunk")
                     continue
                 }
             }
 
-            if processTapStreamDebugEnabled && streamDebugLogCount < 6 {
+            if globalVerbose && streamDebugLogCount < 6 {
                 var inputPeak: Float = 0
                 for i in 0..<min(framesRead, 512) {
                     inputPeak = max(inputPeak, abs(tempLeft[i]), abs(tempRight[i]))
                 }
-                processTapStreamDebug("Ring read frames=\(framesRead) peak=\(inputPeak)")
+                Console.debug("Ring read frames=\(framesRead) peak=\(inputPeak)")
             }
 
             inputBuffer.frameLength = AVAudioFrameCount(framesRead)
@@ -286,8 +279,8 @@ final class ProcessTapStream {
                 guard byteCount > 0, let data = outputBuffer.audioBufferList.pointee.mBuffers.mData else {
                     continue
                 }
-                if processTapStreamDebugEnabled && streamDebugLogCount < 6 {
-                    processTapStreamDebug("PCM write frames=\(outputBuffer.frameLength) bytes=\(byteCount) status=\(status.rawValue)")
+                if globalVerbose && streamDebugLogCount < 6 {
+                    Console.debug("PCM write frames=\(outputBuffer.frameLength) bytes=\(byteCount) status=\(status.rawValue)")
                     streamDebugLogCount += 1
                 }
                 try writeChunk(UnsafeRawPointer(data), byteCount)
