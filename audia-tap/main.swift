@@ -7,21 +7,58 @@ import CoreGraphics
 
 private let audiaVersion = "1.1.0"
 
-// MARK: - Debug / quiet
-
 /// Global verbose flag (set by --verbose / -v or AUDIA_TAP_DEBUG=1 env var).
 var globalVerbose: Bool = ProcessInfo.processInfo.environment["AUDIA_TAP_DEBUG"] == "1"
 /// Global quiet flag (set by --quiet / -q). Suppresses informational stderr messages.
 var globalQuiet: Bool = false
 
+// MARK: - Console & Styles
+
+enum Console {
+    static let bold    = "\u{1B}[1m"
+    static let reset   = "\u{1B}[0m"
+    static let red     = "\u{1B}[31m"
+    static let green   = "\u{1B}[32m"
+    static let yellow  = "\u{1B}[33m"
+    static let blue    = "\u{1B}[34m"
+    static let cyan    = "\u{1B}[36m"
+    static let gray    = "\u{1B}[90m"
+    static let magenta = "\u{1B}[35m"
+
+    /// Logs a debug message in gray to stderr.
+    static func debug(_ message: String) {
+        guard globalVerbose else { return }
+        fputs("\(gray)[audia-debug]\(reset) \(message)\n", stderr)
+    }
+
+    /// Logs an informational message in blue/cyan to stderr.
+    static func info(_ message: String) {
+        guard !globalQuiet else { return }
+        fputs("\(cyan)[audia-info]\(reset) \(message)\n", stderr)
+    }
+
+    /// Logs a warning in yellow to stderr.
+    static func warn(_ message: String) {
+        fputs("\(yellow)[audia-warn]\(reset) \(message)\n", stderr)
+    }
+
+    /// Logs an error in bold red to stderr.
+    static func error(_ message: String) {
+        fputs("\(bold)\(red)[audia-error]\(reset) \(message)\n", stderr)
+    }
+
+    /// Logs a success message in green to stderr.
+    static func success(_ message: String) {
+        fputs("\(green)[audia-success]\(reset) \(message)\n", stderr)
+    }
+}
+
 private func debugLog(_ message: String) {
-    guard globalVerbose else { return }
-    fputs("[audia-tap] \(message)\n", stderr)
+    Console.debug(message)
 }
 
 private func infoLog(_ message: String) {
-    guard !globalQuiet else { return }
-    fputs("[audia-tap] \(message)\n", stderr)
+    Console.info(message)
 }
 
 // MARK: - Options
@@ -77,77 +114,82 @@ final class SignalRelay {
 // MARK: - Help / version
 
 private func printHelp() {
+    let b = Console.bold
+    let r = Console.reset
+    let m = Console.magenta
+    let c = Console.cyan
+    let y = Console.yellow
+    let g = Console.green
+    let gy = Console.gray
+    let bl = Console.blue
+
     print("""
-    \u{001B}[1maudia-tap\u{001B}[0m \(audiaVersion) — driverless per-process audio tap for macOS
+    \(b)\(bl)audia-tap\(r) \(audiaVersion) \(gy)— driverless per-process audio tap for macOS\(r)
 
-    \u{001B}[1mUSAGE\u{001B}[0m
-      audia-tap [OPTIONS] --pid <PID>
-      audia-tap [OPTIONS] --app <NAME>
-      audia-tap --list
-      audia-tap --agent
+    \(b)\(bl)USAGE\(r)
+      \(m)audia-tap\(r) [OPTIONS] \(c)--pid\(r) \(y)<PID>\(r)
+      \(m)audia-tap\(r) [OPTIONS] \(c)--app\(r) \(y)<NAME>\(r)
+      \(m)audia-tap\(r) \(c)--list\(r)
+      \(m)audia-tap\(r) \(c)--agent\(r)
 
-    \u{001B}[1mTARGET SELECTION\u{001B}[0m
-      --pid  <PID>         Tap the process with this process ID
-      --app  <NAME>        Tap the first process whose name matches NAME (case-insensitive)
-      --list, -l           List all active audio processes and exit
+    \(b)\(bl)TARGET SELECTION\(r)
+      \(c)--pid\(r)  \(y)<PID>\(r)         Tap the process with this process ID
+      \(c)--app\(r)  \(y)<NAME>\(r)        Tap the first process matching NAME \(gy)(case-insensitive)\(r)
+      \(c)--list, -l\(r)           \(gy)List all active audio processes and exit\(r)
 
-    \u{001B}[1mOUTPUT FORMAT\u{001B}[0m
-      --format <fmt>       Output format: pcm16 (default), wav, f32
-                             pcm16  Raw signed 16-bit PCM (little-endian)
-                             wav    PCM16 with a streaming RIFF/WAV header prepended
-                             f32    Raw 32-bit float PCM
-      --sample-rate <hz>   Destination sample rate in Hz (default: 16000)
-      --channels <n>       Output channels: 1 = mono (default), 2 = stereo
+    \(b)\(bl)OUTPUT FORMAT\(r)
+      \(c)--format\(r) \(y)<fmt>\(r)       Output format: \(b)pcm16\(r) \(gy)(default)\(r), \(b)wav\(r), \(b)f32\(r)
+                             \(c)pcm16\(r)  Raw signed 16-bit PCM (little-endian)
+                             \(c)wav\(r)    PCM16 with a streaming RIFF/WAV header prepended
+                             \(c)f32\(r)    Raw 32-bit float PCM
+      \(c)--sample-rate\(r) \(y)<hz>\(r)   Sample rate in Hz \(gy)(default: \(g)16000\(gy))\(r)
+      \(c)--channels\(r) \(y)<n>\(r)       Channels: \(g)1\(r) = \(y)mono\(r) \(gy)(default)\(r), \(g)2\(r) = \(y)stereo\(r)
 
-    \u{001B}[1mOUTPUT DESTINATION\u{001B}[0m
-      --output <path>, -o  Write audio to a file instead of stdout
-      --duration <secs>    Automatically stop after N seconds
+    \(b)\(bl)OUTPUT DESTINATION\(r)
+      \(c)--output\(r) \(y)<path>\(r), \(c)-o\(r)  Write audio to file instead of \(y)stdout\(r)
+      \(c)--duration\(r) \(y)<secs>\(r)    Automatically stop after \(y)N\(r) seconds
 
-    \u{001B}[1mAUDIO PROCESSING\u{001B}[0m
-      --volume <gain>      Linear gain multiplier applied before conversion (default: 1.0)
-      --silence-threshold  RMS level below which chunks are dropped (default: 0, off)
-        <rms>              Example: 0.01 silences background hiss
+    \(b)\(bl)AUDIO PROCESSING\(r)
+      \(c)--volume\(r) \(y)<gain>\(r)      Linear gain multiplier \(gy)(default: \(g)1.0\(gy))\(r)
+      \(c)--silence-threshold\(r)  RMS level for silence gate \(gy)(default: \(g)0\(gy), off)\(r)
+        \(y)<rms>\(r)              Example: \(g)0.01\(r) silences background hiss
 
-    \u{001B}[1mMETADATA\u{001B}[0m
-      --json-info          Print a JSON object with stream metadata to stderr before
-                           audio begins (pid, name, sampleRate, channels, format)
+    \(b)\(bl)METADATA\(r)
+      \(c)--json-info\(r)          Print a \(y)JSON\(r) object with stream metadata to \(y)stderr\(r)
 
-    \u{001B}[1mAGENT & DAEMON\u{001B}[0m
-      --agent              Run as a background permission-anchoring agent (internal use)
-      --via-agent          Connect directly to a running agent without auto-launching
-      --agent-socket <p>   Override the Unix socket path (default: /tmp/audia-tap-<uid>.sock)
-      --timeout <secs>     Seconds to wait for agent socket to appear (default: 8)
+    \(b)\(bl)AGENT & DAEMON\(r)
+      \(c)--agent\(r)              Run as a background permission-anchoring agent
+      \(c)--via-agent\(r)          Connect directly to a running agent
+      \(c)--agent-socket\(r) \(y)<p>\(r)   Unix socket path \(gy)(default: /tmp/audia-tap-<uid>.sock)\(r)
+      \(c)--timeout\(r) \(y)<secs>\(r)     Seconds to wait for agent \(gy)(default: \(g)8\(gy))\(r)
 
-    \u{001B}[1mDEBUGGING\u{001B}[0m
-      --verbose, -v        Enable verbose debug output on stderr (alias for AUDIA_TAP_DEBUG=1)
-      --quiet,   -q        Suppress all informational stderr messages
+    \(b)\(bl)DEBUGGING\(r)
+      \(c)--verbose, -v\(r)        Enable verbose debug output on \(y)stderr\(r)
+      \(c)--quiet,   -q\(r)        Suppress all informational stderr messages
 
-    \u{001B}[1mMISCELLANEOUS\u{001B}[0m
-      --request-permission Request Audio Capture permission and exit
-      --chunk-frames <n>   Internal ring-buffer chunk size in frames (default: 4096)
-      --help,    -h        Show this help message and exit
-      --version            Print version and exit
+    \(b)\(bl)MISCELLANEOUS\(r)
+      \(c)--request-permission\(r) Request \(y)Audio Capture\(r) permission and exit
+      \(c)--chunk-frames\(r) \(y)<n>\(r)   Internal buffer chunk size \(gy)(default: \(g)4096\(gy))\(r)
+      \(c)--help,    -h\(r)        Show this help message and exit
+      \(c)--version\(r)            Print version and exit
 
-    \u{001B}[1mEXAMPLES\u{001B}[0m
-      # List all processes that are producing audio
-      audia-tap --list
+    \(b)\(bl)EXAMPLES\(r)
+      \(gy)# List all processes producing audio\(r)
+      \(m)audia-tap\(r) \(c)--list\(r)
 
-      # Tap Safari and pipe to Whisper
-      audia-tap --pid $(pgrep Safari) | python3 Scripts/whisper_demo.py /dev/stdin
+      \(gy)# Tap Safari and pipe to Whisper\(r)
+      \(m)audia-tap\(r) \(c)--pid\(r) $(pgrep Safari) | \(m)python3\(r) Scripts/whisper_demo.py /dev/stdin
 
-      # Tap Spotify by name, output stereo WAV at 44.1 kHz, save to file
-      audia-tap --app Spotify --format wav --sample-rate 44100 --channels 2 -o spotify.wav
+      \(gy)# Tap Spotify by name, output stereo WAV at 44.1 kHz, save to file\(r)
+      \(m)audia-tap\(r) \(c)--app\(r) Spotify \(c)--format\(r) wav \(c)--sample-rate\(r) 44100 \(c)--channels\(r) 2 \(c)-o\(r) spotify.wav
 
-      # Tap Zoom, boost volume 1.5×, suppress silence, run for 60 seconds
-      audia-tap --app Zoom --volume 1.5 --silence-threshold 0.01 --duration 60
-
-      # Inspect stream metadata as JSON before piping
-      audia-tap --pid 1234 --json-info --quiet | python3 my_model.py
+      \(gy)# Tap Zoom, run for 60 seconds\(r)
+      \(m)audia-tap\(r) \(c)--app\(r) Zoom \(c)--duration\(r) 60
     """)
 }
 
 private func printVersion() {
-    print("audia-tap \(audiaVersion)")
+    print("\(Console.bold)audia-tap\(Console.reset) \(audiaVersion)")
 }
 
 // MARK: - Argument parsing
@@ -821,15 +863,15 @@ do {
         _ = CGRequestScreenCaptureAccess()
         let status = requestAudioCapturePermission()
         if status == .authorized {
-            fputs("[audia-tap] Audio Capture permission granted.\n", stderr)
+            Console.success("Audio Capture permission granted.")
         } else {
-            fputs("[audia-tap] Audio Capture permission was denied.\n", stderr)
+            Console.error("Audio Capture permission was denied.")
             exit(1)
         }
 
     case .requestPermission:
         try ensureAudioCapturePermission()
-        fputs("Audio Capture permission authorized.\n", stderr)
+        Console.success("Audio Capture permission authorized.")
 
     case .agent:
         let agentSocketPath = CLIOptions().socketPath
@@ -877,6 +919,6 @@ do {
         try runClient(pid: pid, options: options)
     }
 } catch {
-    fputs("audia-tap error: \(error)\n", stderr)
+    Console.error("\(error)")
     exit(1)
 }

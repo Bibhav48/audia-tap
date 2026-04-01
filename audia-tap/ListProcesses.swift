@@ -55,21 +55,22 @@ func printAudioProcessList(quiet: Bool) {
             s + String(repeating: " ", count: max(0, width - s.count))
         }
 
-        let separator = String(repeating: "─", count: pidWidth + nameWidth + bundleWidth + 18)
-        let header = "  \(pad("PID", pidWidth))  \(pad("NAME", nameWidth))  \(pad("BUNDLE ID", bundleWidth))  ACTIVE"
+        let separator = "\(Console.gray)" + String(repeating: "─", count: pidWidth + nameWidth + bundleWidth + 18) + "\(Console.reset)"
+        let header = "  \(Console.bold)\(pad("PID", pidWidth))  \(pad("NAME", nameWidth))  \(pad("BUNDLE ID", bundleWidth))  ACTIVE\(Console.reset)"
 
         print(separator)
         print(header)
         print(separator)
         for p in processes {
-            let active = p.isRunningOutput ? "▶ yes" : "  no "
-            print("  \(pad(String(p.pid), pidWidth))  \(pad(p.name, nameWidth))  \(pad(p.bundleID, bundleWidth))  \(active)")
+            let active = p.isRunningOutput ? "\(Console.green)▶ yes\(Console.reset)" : "\(Console.gray)  no \(Console.reset)"
+            let pid = "\(Console.cyan)\(pad(String(p.pid), pidWidth))\(Console.reset)"
+            print("  \(pid)  \(pad(p.name, nameWidth))  \(pad(p.bundleID, bundleWidth))  \(active)")
         }
         print(separator)
-        print("  \(processes.count) process(es) listed. Use \u{001B}[1maudia-tap --pid <PID>\u{001B}[0m to tap one.")
+        print("  \(Console.bold)\(processes.count)\(Console.reset) process(es) listed. Use \(Console.bold)\(Console.magenta)audia-tap --pid <PID>\(Console.reset) to tap one.")
         print(separator)
     } catch {
-        fputs("audia-tap error listing processes: \(error)\n", stderr)
+        Console.error("Listing processes: \(error)")
         exit(1)
     }
 }
