@@ -26,6 +26,10 @@
   Originally built as the core audio routing engine for <strong>Audia</strong>, we've open-sourced this fundamental building block for the community. Capture application audio without clunky virtual drivers (like BlackHole). 100% local. Zero virtual routing.
 </p>
 
+<p align="center">
+  <img src="assets/Audia-tap-demo.gif" alt="Audia Tap Demo" width="100%"/>
+</p>
+
 <br>
 
 ## ⚡ Features
