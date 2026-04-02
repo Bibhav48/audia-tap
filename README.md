@@ -1,9 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/icon-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="assets/icon-light.png">
-    <img src="assets/icon-light.png" width="170" height="170" alt="Audia Tap icon"/>
-  </picture>
+  <img src="assets/icon-light.png" width="170" height="170" alt="Audia Tap icon"/>
 </p>
 
 <h1 align="center">audia-tap</h1>
