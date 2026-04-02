@@ -866,46 +866,18 @@ do {
         Console.success("Audio Capture permission authorized.")
 
     case .agent:
+        // Agent runs in the background. DO NOT call ensureAudioCapturePermission() here,
+        // because it uses 'open -a' which deadlocks background apps missing AppDelegates!
+        // The foreground CLI already handled permissions!
         let agentSocketPath = CLIOptions().socketPath
         let server = AgentServer(socketPath: agentSocketPath)
         try server.start()
         let relay = SignalRelay()
         relay.install { _ in server.stop(); exit(0) }
-        // Block the main thread; signal handlers drive exit.
-        dispatchMain()
+        RunLoop.main.run()
 
     case .direct(let pid, let options):
-        try ensureAudioCapturePermission()
-
-        let process = try AudioProcess(pid: pid)
-        let stream  = try ProcessTapStream(process: process)
-        try stream.start()
-
-        emitJSONInfo(process: process, options: options, tapSampleRate: stream.tapSampleRate)
-
-        let outputHandle = try openOutputHandle(options: options)
-
-        Console.info("Tapping \(process.name) (pid \(pid)) → \(options.format.rawValue) \(Int(options.sampleRate))Hz \(options.channels)ch")
-
-        let signal = SignalRelay()
-        signal.install { _ in stream.stop(); exit(0) }
-
-        let streamSemaphore = DispatchSemaphore(value: 0)
-        var streamError: Error?
-        Task.detached(priority: .userInitiated) {
-            defer { stream.stop(); streamSemaphore.signal() }
-            do {
-                try await runWithDuration(options.duration) {
-                    try await stream.stream(options: options) { bytes, byteCount in
-                        outputHandle.write(Data(bytes: bytes, count: byteCount))
-                    }
-                }
-            } catch {
-                streamError = error
-            }
-        }
-        streamSemaphore.wait()
-        if let error = streamError { throw error }
+        try runDirect(pid: pid, options: options)
 
     case .viaAgent(let pid, let options):
         try runClient(pid: pid, options: options)
