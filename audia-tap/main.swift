@@ -559,7 +559,58 @@ private func writeAll(fileDescriptor: Int32, buffer: UnsafeRawPointer, count: In
     }
 }
 
-private func readRequestLine(fileDescriptor: Int32, maxBytes: Int = 64) throws -> String {
+private struct AgentStreamRequest: Codable {
+    let pid: Int32
+    let format: String
+    let sampleRate: Double
+    let channels: Int
+    let chunkFrames: Int
+    let volume: Float
+    let silenceThreshold: Float
+
+    init(pid: pid_t, options: CLIOptions) {
+        self.pid = pid
+        self.format = options.format.rawValue
+        self.sampleRate = options.sampleRate
+        self.channels = options.channels
+        self.chunkFrames = options.chunkFrames
+        self.volume = options.volume
+        self.silenceThreshold = options.silenceThreshold
+    }
+
+    func streamOptions() throws -> CLIOptions {
+        guard let parsedFormat = OutputFormat.parse(format) else {
+            throw "Unsupported format in agent request: \(format)"
+        }
+        var options = CLIOptions()
+        options.format = parsedFormat
+        options.sampleRate = sampleRate
+        options.channels = channels
+        options.chunkFrames = chunkFrames
+        options.volume = volume
+        options.silenceThreshold = silenceThreshold
+        return options
+    }
+}
+
+private func parseAgentStreamRequest(_ request: String) throws -> AgentStreamRequest {
+    let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        throw "Expected PID request from client"
+    }
+
+    if trimmed.first == "{" {
+        let payload = Data(trimmed.utf8)
+        return try JSONDecoder().decode(AgentStreamRequest.self, from: payload)
+    }
+
+    guard let pid = Int32(trimmed), pid > 0 else {
+        throw "Expected a positive integer PID request"
+    }
+    return AgentStreamRequest(pid: pid, options: CLIOptions())
+}
+
+private func readRequestLine(fileDescriptor: Int32, maxBytes: Int = 4096) throws -> String {
     var bytes = [UInt8]()
     bytes.reserveCapacity(16)
     while bytes.count < maxBytes {
@@ -572,6 +623,73 @@ private func readRequestLine(fileDescriptor: Int32, maxBytes: Int = 64) throws -
     }
     guard !bytes.isEmpty else { throw "Expected PID request from client" }
     return String(decoding: bytes, as: UTF8.self)
+}
+
+private struct OutputWriter {
+    private let handle: FileHandle
+    private let outputPath: String?
+    private let format: OutputFormat
+    private var bytesWritten: Int64 = 0
+
+    init(handle: FileHandle, outputPath: String?, format: OutputFormat) {
+        self.handle = handle
+        self.outputPath = outputPath
+        self.format = format
+    }
+
+    mutating func write(_ data: Data) {
+        handle.write(data)
+        bytesWritten += Int64(data.count)
+    }
+
+    mutating func finalize() {
+        defer {
+            if outputPath != nil {
+                try? handle.synchronize()
+                try? handle.close()
+            }
+        }
+        guard outputPath != nil, format == .wav else { return }
+        do {
+            try finalizeWAVHeader()
+        } catch {
+            Console.warn("Failed to finalize WAV header: \(error)")
+        }
+    }
+
+    private func finalizeWAVHeader() throws {
+        guard bytesWritten >= 44 else { return }
+
+        try handle.seek(toOffset: 0)
+        guard let header = try handle.read(upToCount: 44), header.count >= 44 else {
+            throw "Incomplete WAV header"
+        }
+
+        let riff = Data("RIFF".utf8)
+        let wave = Data("WAVE".utf8)
+        let dataChunk = Data("data".utf8)
+        guard header.prefix(4) == riff,
+              header.dropFirst(8).prefix(4) == wave,
+              header.dropFirst(36).prefix(4) == dataChunk else {
+            throw "Output does not contain a canonical RIFF/WAV header"
+        }
+
+        let dataSize64 = max(0, bytesWritten - 44)
+        let dataSize = UInt32(min(dataSize64, Int64(UInt32.max)))
+        let riffSize = dataSize &+ 36
+
+        var riffLE = riffSize.littleEndian
+        var dataLE = dataSize.littleEndian
+
+        try handle.seek(toOffset: 4)
+        withUnsafeBytes(of: &riffLE) { bytes in
+            handle.write(Data(bytes))
+        }
+        try handle.seek(toOffset: 40)
+        withUnsafeBytes(of: &dataLE) { bytes in
+            handle.write(Data(bytes))
+        }
+    }
 }
 
 // MARK: - Agent server
@@ -650,9 +768,9 @@ final class AgentServer {
         }
         do {
             let request = try readRequestLine(fileDescriptor: clientFD)
-            guard let pid = Int32(request.trimmingCharacters(in: .whitespacesAndNewlines)), pid > 0 else {
-                throw "Expected a positive integer PID request"
-            }
+            let streamRequest = try parseAgentStreamRequest(request)
+            let pid = streamRequest.pid
+            let streamOptions = try streamRequest.streamOptions()
             let process = try AudioProcess(pid: pid)
             let stream  = try ProcessTapStream(process: process)
             try stream.start()
@@ -660,7 +778,7 @@ final class AgentServer {
             Task.detached(priority: .userInitiated) {
                 defer { stream.stop(); semaphore.signal() }
                 do {
-                    try await stream.streamPCM16Mono { bytes, byteCount in
+                    try await stream.stream(options: streamOptions) { bytes, byteCount in
                         try writeAll(fileDescriptor: clientFD, buffer: bytes, count: byteCount)
                     }
                 } catch {
@@ -701,22 +819,22 @@ private func runClient(pid: pid_t, options: CLIOptions) throws {
     let fd = try connectToAgent(socketPath: options.socketPath)
     defer { close(fd) }
 
-    let request = "\(pid)\n"
-    try request.utf8.withContiguousStorageIfAvailable { buffer in
-        try writeAll(fileDescriptor: fd, buffer: buffer.baseAddress!, count: buffer.count)
-    } ?? {
-        let data = Data(request.utf8)
-        try data.withUnsafeBytes { rawBuffer in
-            guard let base = rawBuffer.baseAddress else { return }
-            try writeAll(fileDescriptor: fd, buffer: base, count: rawBuffer.count)
-        }
-    }()
+    let request = AgentStreamRequest(pid: pid, options: options)
+    let payload = try JSONEncoder().encode(request)
+    var line = payload
+    line.append(0x0A) // newline framing
+    try line.withUnsafeBytes { rawBuffer in
+        guard let base = rawBuffer.baseAddress else { return }
+        try writeAll(fileDescriptor: fd, buffer: base, count: rawBuffer.count)
+    }
 
     let outputHandle = try openOutputHandle(options: options)
+    var outputWriter = OutputWriter(handle: outputHandle, outputPath: options.outputPath, format: options.format)
+    defer { outputWriter.finalize() }
     var buffer = [UInt8](repeating: 0, count: 16_384)
     while true {
         let bytesRead = read(fd, &buffer, buffer.count)
-        if bytesRead > 0 { outputHandle.write(Data(buffer.prefix(bytesRead))); continue }
+        if bytesRead > 0 { outputWriter.write(Data(buffer.prefix(bytesRead))); continue }
         if bytesRead == 0 { return }
         if errno == EINTR { continue }
         throw "Failed reading from audia-tap agent: \(errno)"
