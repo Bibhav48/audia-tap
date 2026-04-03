@@ -422,7 +422,10 @@ private func resolveAppNameToPID(_ name: String) throws -> pid_t {
         return MatchCandidate(process: process, score: score)
     }
 
-    if let best = candidates.max(by: { lhs, rhs in
+    let runningCandidates = candidates.filter { $0.process.isRunningOutput }
+    let selectionPool = runningCandidates.isEmpty ? candidates : runningCandidates
+
+    if let best = selectionPool.max(by: { lhs, rhs in
         if lhs.score == rhs.score {
             if lhs.process.isRunningOutput != rhs.process.isRunningOutput {
                 return !lhs.process.isRunningOutput && rhs.process.isRunningOutput
@@ -861,7 +864,25 @@ private func runClient(pid: pid_t, options: CLIOptions) throws {
     var outputWriter = OutputWriter(handle: outputHandle, outputPath: options.outputPath, format: options.format)
     defer { outputWriter.finalize() }
     var buffer = [UInt8](repeating: 0, count: 16_384)
+
+    let deadline = options.duration.map { Date().addingTimeInterval($0) }
     while true {
+        if let deadline {
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { return }
+
+            var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            let timeoutMS = max(1, Int32(min(remaining * 1000.0, Double(Int32.max))))
+            let pollResult = withUnsafeMutablePointer(to: &pfd) { ptr in
+                poll(ptr, 1, timeoutMS)
+            }
+            if pollResult == 0 { return } // duration reached without more data
+            if pollResult < 0 {
+                if errno == EINTR { continue }
+                throw "poll() failed while reading from audia-tap agent: \(errno)"
+            }
+        }
+
         let bytesRead = read(fd, &buffer, buffer.count)
         if bytesRead > 0 { outputWriter.write(Data(buffer.prefix(bytesRead))); continue }
         if bytesRead == 0 { return }
