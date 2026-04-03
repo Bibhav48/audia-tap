@@ -42,19 +42,29 @@
 
 ## 🚀 Quick Start
 
-### 1. Build and Install
+### 1. Install
 
-Clone the repository and install the CLI globally. _(Requires Xcode command-line tools)_.
+#### Option A — Homebrew Cask (Recommended)
+
+```bash
+brew tap Bibhav48/tap
+brew install --cask audia-tap
+```
+
+> Why cask? `audia-tap` is CLI-first, but ships an `.app` bundle to satisfy macOS Audio Capture permission anchoring.  
+> The cask installs `audia-tap.app` and exposes the `audia-tap` CLI command.
+
+#### Option B — Build from Source
+
+Clone the repository and install globally. _(Requires Xcode command-line tools)_.
 
 ```bash
 git clone https://github.com/Bibhav48/audia-tap.git
 cd audia-tap
-
-# Build and install the app to /Applications and link the CLI to /usr/local/bin
 ./install.sh
 ```
 
-> **Permission Note:** On your first run, the tool will auto-anchor to handle macOS Screen & System Audio Recording permissions cleanly.
+> **Permission Note:** On first run, `audia-tap` will auto-anchor to handle macOS Screen & System Audio Recording permissions.
 
 ### 2. Find your Target PID
 
