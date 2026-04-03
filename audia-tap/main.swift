@@ -692,20 +692,6 @@ private struct OutputWriter {
     private func finalizeWAVHeader() throws {
         guard bytesWritten >= 44 else { return }
 
-        try handle.seek(toOffset: 0)
-        guard let header = try handle.read(upToCount: 44), header.count >= 44 else {
-            throw "Incomplete WAV header"
-        }
-
-        let riff = Data("RIFF".utf8)
-        let wave = Data("WAVE".utf8)
-        let dataChunk = Data("data".utf8)
-        guard header.prefix(4) == riff,
-              header.dropFirst(8).prefix(4) == wave,
-              header.dropFirst(36).prefix(4) == dataChunk else {
-            throw "Output does not contain a canonical RIFF/WAV header"
-        }
-
         let dataSize64 = max(0, bytesWritten - 44)
         let dataSize = UInt32(min(dataSize64, Int64(UInt32.max)))
         let riffSize = dataSize &+ 36
