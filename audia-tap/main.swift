@@ -400,12 +400,41 @@ private func parseArguments(arguments: [String]) throws -> LaunchMode {
 private func resolveAppNameToPID(_ name: String) throws -> pid_t {
     let processes = try fetchAudioProcessList()
     let lower = name.lowercased()
-    if let match = processes.first(where: {
-        $0.name.lowercased().contains(lower) || $0.bundleID.lowercased().contains(lower)
-    }) {
-        Console.debug("Resolved --app '\(name)' to pid \(match.pid) (\(match.name))")
-        return match.pid
+
+    struct MatchCandidate {
+        let process: AudioProcessInfo
+        let score: Int
     }
+
+    let candidates: [MatchCandidate] = processes.compactMap { process in
+        let processName = process.name.lowercased()
+        let bundleID = process.bundleID.lowercased()
+        let bundleLast = bundleID.split(separator: ".").last.map(String.init) ?? ""
+
+        var score = 0
+        if processName == lower { score += 2_000 }
+        if bundleID == lower || bundleLast == lower { score += 1_800 }
+        if processName.contains(lower) { score += 900 }
+        if bundleID.contains(lower) { score += 800 }
+        if process.isRunningOutput { score += 1_400 }
+
+        guard score > 0 else { return nil }
+        return MatchCandidate(process: process, score: score)
+    }
+
+    if let best = candidates.max(by: { lhs, rhs in
+        if lhs.score == rhs.score {
+            if lhs.process.isRunningOutput != rhs.process.isRunningOutput {
+                return !lhs.process.isRunningOutput && rhs.process.isRunningOutput
+            }
+            return lhs.process.pid > rhs.process.pid
+        }
+        return lhs.score < rhs.score
+    }) {
+        Console.debug("Resolved --app '\(name)' to pid \(best.process.pid) (\(best.process.name)) runningOutput=\(best.process.isRunningOutput)")
+        return best.process.pid
+    }
+
     throw "No audio process found matching '\(name)'. Run audia-tap --list to see available processes."
 }
 
