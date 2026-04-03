@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag/version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          VERSION="${TAG#v}"
+          SOURCE_REPO="${{ github.repository }}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "dmg_name=audia-tap-${VERSION}.dmg" >> "$GITHUB_OUTPUT"
+          echo "source_repo=${SOURCE_REPO}" >> "$GITHUB_OUTPUT"
+
+      - name: Build DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x Scripts/build_release_dmg.sh
+          Scripts/build_release_dmg.sh "${{ steps.meta.outputs.version }}"
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            "dist/release/${{ steps.meta.outputs.dmg_name }}" \
+            --clobber
+
+      - name: Compute SHA256
+        id: sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(shasum -a 256 "dist/release/${{ steps.meta.outputs.dmg_name }}" | awk '{print $1}')"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew tap cask
+        if: ${{ secrets.TAP_REPO_TOKEN != '' }}
+        env:
+          TAP_REPO_TOKEN: ${{ secrets.TAP_REPO_TOKEN }}
+          TAP_REPO: ${{ secrets.TAP_REPO != '' && secrets.TAP_REPO || format('{0}/homebrew-tap', github.repository_owner) }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA256: ${{ steps.sha.outputs.sha }}
+          SOURCE_REPO: ${{ steps.meta.outputs.source_repo }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/homebrew-tap
+          git clone "https://x-access-token:${TAP_REPO_TOKEN}@github.com/${TAP_REPO}.git" /tmp/homebrew-tap
+          cat > /tmp/homebrew-tap/Casks/audia-tap.rb <<EOF
+cask "audia-tap" do
+  version "${VERSION}"
+  sha256 "${SHA256}"
+
+  url "https://github.com/${SOURCE_REPO}/releases/download/v#{version}/audia-tap-#{version}.dmg"
+  name "audia-tap"
+  desc "Per-app macOS audio tap CLI"
+  homepage "https://github.com/${SOURCE_REPO}"
+
+  app "audia-tap.app"
+  binary "/Applications/audia-tap.app/Contents/MacOS/audia-tap", target: "audia-tap"
+
+  caveats <<~EOS
+    audia-tap installs an app bundle to anchor macOS audio-capture permissions.
+    CLI binary path: /Applications/audia-tap.app/Contents/MacOS/audia-tap
+  EOS
+end
+EOF
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/audia-tap.rb
+          if git diff --cached --quiet; then
+            echo "No cask changes to commit."
+            exit 0
+          fi
+          git commit -m "[skip ci] bump audia-tap cask to ${VERSION}"
+          git push origin main

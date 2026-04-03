@@ -234,6 +234,38 @@ uv pip install "mlx>=0.19.0" "parakeet-mlx>=1.0.1" numpy soundfile
 python3 Scripts/parakeet_mlx_demo.py <PID>
 ```
 
+---
+
+## 🚢 Maintainer Release Flow
+
+`audia-tap` now has an automated release chain:
+
+1. Create/publish a GitHub release tag like `v0.1.1`.
+2. GitHub Actions builds `audia-tap.app`, packages `audia-tap-0.1.1.dmg`, uploads it to that release.
+3. If `TAP_REPO_TOKEN` is configured, CI also updates a tap cask (`version` + `sha256`) and pushes it.
+
+Workflow file:
+- `.github/workflows/release.yml`
+
+Optional secrets for tap auto-update:
+- `TAP_REPO_TOKEN`: GitHub token with push access to your tap repository.
+- `TAP_REPO`: optional `<owner>/<repo>` override for tap repo.
+  - Default is `${{ github.repository_owner }}/homebrew-tap`.
+
+Local equivalent:
+```bash
+# Build + upload release asset
+./Scripts/release_local.sh 0.1.1
+
+# Build + upload + update local tap repo checkout
+./Scripts/release_local.sh 0.1.1 /Users/<you>/Projects/homebrew-tap
+```
+
+Production DMG is built with:
+- `audia-tap.app`
+- `Applications` symlink
+- `README.txt` (permission-anchor + CLI path explanation)
+
 <br>
 
 ## 🗺️ Roadmap

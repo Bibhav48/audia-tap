@@ -40,6 +40,16 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXResourcesBuildPhase section */
+		9A3A20E42F6E8D2800B21D68 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXGroup section */
 		9A3A20D12F6E8D2700B21D68 = {
 			isa = PBXGroup;
@@ -66,6 +76,7 @@
 			buildPhases = (
 				9A3A20D62F6E8D2800B21D68 /* Sources */,
 				9A3A20D72F6E8D2800B21D68 /* Frameworks */,
+				9A3A20E42F6E8D2800B21D68 /* Resources */,
 				9A3A20D82F6E8D2800B21D68 /* CopyFiles */,
 			);
 			buildRules = (
@@ -249,6 +260,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CONFIGURATION_BUILD_DIR = "$(PROJECT_DIR)/dist/Debug";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_ENTITLEMENTS = "audia-tap/audia-tap.entitlements";
@@ -256,7 +268,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "audia-tap/Info.plist";
+				INFOPLIST_FILE = "Config/Info.plist";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.audia.tap";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -270,6 +282,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CONFIGURATION_BUILD_DIR = "$(PROJECT_DIR)/dist/Release";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_ENTITLEMENTS = "audia-tap/audia-tap.entitlements";
@@ -277,7 +290,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "audia-tap/Info.plist";
+				INFOPLIST_FILE = "Config/Info.plist";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.audia.tap";
 				PRODUCT_NAME = "$(TARGET_NAME)";
