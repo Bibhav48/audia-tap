@@ -19,7 +19,7 @@
 <p align="justify">
   <strong>audia-tap</strong> is a standalone Swift CLI that bypasses the macOS system mixer entirely. It uses a native Hardware Abstraction Layer (HAL) tap to hook directly into any running application's process ID (PID), extracting raw 16-bit PCM audio and piping it straight to <code>stdout</code>.
   <br><br>
-  Originally built as the core audio routing engine for <strong>Audia</strong>, we've open-sourced this fundamental building block for the community. Capture application audio without clunky virtual drivers (like BlackHole). 100% local. Zero virtual routing.
+  Originally built as the core audio routing engine for <strong><a href="https://github.com/Bibhav48/audia-dist/">Audia</a></strong>, we've open-sourced this fundamental building block for the community. Capture application audio without clunky virtual drivers (like BlackHole). 100% local. Zero virtual routing.
 </p>
 
 <p align="center">
